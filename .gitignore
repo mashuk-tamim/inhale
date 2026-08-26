@@ -8,3 +8,9 @@ build/
 .externalNativeBuild
 .cxx
 inhale-release.keystore
+
+# Agent & IDE Configurations
+.agents/
+AGENTS.md
+CLAUDE.md
+.vscode/

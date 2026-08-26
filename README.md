@@ -26,6 +26,26 @@ Every pause is recorded: how many times you opened the app, how often you walked
 1. Open the downloaded file on your phone (allow "Install unknown apps" if asked).
 2. Follow the onboarding to grant accessibility and (optional) usage access.
 
+<details>
+<summary><strong>Install blocked? Two one-time huddles on some devices (e.g. Oppo/ColorOS)</strong></summary>
+
+**"App blocked to protect your device" (Play Protect)**
+Google can't verify a personally signed APK, so Play Protect flags it by default. Either:
+
+- Tap **More details → Install anyway (unsafe)** on the block screen, or
+- If no option appears: **Play Store → profile icon → Play Protect → ⚙️ → turn off "Scan apps with Play Protect"**, install, then turn it back on.
+
+The "(unsafe)" label only means the publisher isn't verified by Google — expected for any sideloaded APK.
+
+**"Restricted setting" when granting Accessibility**
+Android 13+ blocks sensitive permissions for sideloaded apps until you explicitly unlock them:
+
+1. Long-press the Inhale icon → **App info** (or Settings → Apps → Inhale).
+2. Tap the **⋮ menu** (top-right) → **Allow restricted settings**.
+3. Return to the app and grant the permission — it now works.
+
+</details>
+
 Prefer to browse older versions? See the [Releases](https://github.com/mashuk-tamim/inhale/releases) page.
 
 Requires Android 8.0 (API 26) or newer.

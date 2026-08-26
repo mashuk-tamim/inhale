@@ -21,11 +21,12 @@ Every pause is recorded: how many times you opened the app, how often you walked
 
 ## Download
 
-Grab the latest APK from the [Releases](https://github.com/mashuk-tamim/inhale/releases) page:
+**[⬇️ Download the APK](https://github.com/mashuk-tamim/inhale/releases/latest/download/inhale-v1.0.0.apk)** — always the latest version, no extra clicks.
 
-1. Download `inhale-v<version>.apk` from the newest release.
-2. Open it on your phone (allow "Install unknown apps" if asked).
-3. Follow the onboarding to grant accessibility and (optional) usage access.
+1. Open the downloaded file on your phone (allow "Install unknown apps" if asked).
+2. Follow the onboarding to grant accessibility and (optional) usage access.
+
+Prefer to browse older versions? See the [Releases](https://github.com/mashuk-tamim/inhale/releases) page.
 
 Requires Android 8.0 (API 26) or newer.
 

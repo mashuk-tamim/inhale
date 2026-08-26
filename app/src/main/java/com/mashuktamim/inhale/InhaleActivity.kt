@@ -27,6 +27,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
 import androidx.compose.ui.unit.sp
 
 /**
@@ -234,7 +235,7 @@ fun InhaleScreen(
                             .height(56.dp)
                     ) {
                         Text(
-                            "Stay Mindful · View Stats",
+                            "Stay Mindful · See Insights",
                             style = InhaleTheme.typography.titleMedium,
                             fontSize = if (compact) 15.sp else 16.sp
                         )
@@ -279,18 +280,20 @@ fun BreathingCircle(
     size: Dp = 240.dp,
     colors: InhaleColors
 ) {
-    val transition = rememberInfiniteTransition(label = "breath")
-    val scale by transition.animateFloat(
-        initialValue = 0.36f,
-        targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(4000, easing = EaseInOutCubic),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "scale"
-    )
-
-    val breathLabel = if (scale > 0.68f) "Inhale" else "Exhale"
+    // 4-2-4 breathing cycle: inhale 4s (expand), hold 2s (full), exhale 4s (contract)
+    val breath = remember { Animatable(0.36f) }
+    var breathLabel by remember { mutableStateOf("Inhale") }
+    LaunchedEffect(Unit) {
+        while (true) {
+            breathLabel = "Inhale"
+            breath.animateTo(1f, tween(4000, easing = EaseInOutSine))
+            breathLabel = "Hold"
+            delay(2000)
+            breathLabel = "Exhale"
+            breath.animateTo(0.36f, tween(4000, easing = EaseInOutSine))
+        }
+    }
+    val scale = breath.value
 
     val ringBrush = Brush.sweepGradient(
         listOf(
@@ -303,10 +306,11 @@ fun BreathingCircle(
 
     val strokeWidthDp = 12.dp
 
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = Modifier.size(size)
-    ) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.size(size)
+        ) {
         // Outer Countdown Progress Arc with prominent 12dp width
         Canvas(Modifier.size(size)) {
             val strokeWidthPx = strokeWidthDp.toPx()
@@ -383,7 +387,7 @@ fun BreathingCircle(
                 )
         )
 
-        // Center Countdown & Breath cue
+        // Center Countdown
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
@@ -394,12 +398,15 @@ fun BreathingCircle(
                 fontSize = (size.value * 0.25f).sp,
                 color = colors.textPrimary
             )
-            Spacer(Modifier.height(2.dp))
-            Text(
-                breathLabel,
-                style = InhaleTheme.typography.labelSmall,
-                color = colors.primary
-            )
         }
+        }
+
+        // Breath cue below the circle
+        Text(
+            breathLabel,
+            style = InhaleTheme.typography.labelMedium,
+            color = colors.primary,
+            modifier = Modifier.padding(top = 10.dp)
+        )
     }
 }

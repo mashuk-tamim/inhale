@@ -9,8 +9,12 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -24,11 +28,20 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 
 /**
@@ -67,6 +80,7 @@ private fun AppDetailScreen(pkg: String) {
 
     val app = remember(pkg) { loadApp(context, pkg) }
     var usage by remember { mutableStateOf<Long?>(null) }
+    var weekly by remember { mutableStateOf<List<Long>>(emptyList()) }
     var usageAccess by remember { mutableStateOf(UsageTracker.hasUsageAccess(context)) }
     var appCountdown by remember { mutableStateOf(Prefs.getAppCountdown(context, pkg)) }
     var appBypass by remember { mutableStateOf(Prefs.getAppBypassMinutes(context, pkg)) }
@@ -87,8 +101,13 @@ private fun AppDetailScreen(pkg: String) {
     }
     LaunchedEffect(usageAccess) {
         if (usageAccess) {
-            usage = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                UsageTracker.getUsageLast24h(context)[pkg]
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                val last24 = UsageTracker.getUsageLast24h(context)[pkg]
+                val perDay = UsageTracker.getUsagePerDay(context, pkg, 7)
+                usage to perDay
+            }.let { (u, w) ->
+                usage = u
+                weekly = w
             }
         }
     }
@@ -115,7 +134,14 @@ private fun AppDetailScreen(pkg: String) {
                     border = BorderStroke(1.dp, colors.borderSubtle),
                     modifier = Modifier
                         .clip(RoundedCornerShape(12.dp))
-                        .clickable { (context as? Activity)?.finish() }
+                        .clickable {
+                            context.startActivity(
+                                Intent(context, MainActivity::class.java).apply {
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                                }
+                            )
+                            (context as? Activity)?.finish()
+                        }
                 ) {
                     Box(
                         modifier = Modifier.padding(8.dp),
@@ -183,17 +209,47 @@ private fun AppDetailScreen(pkg: String) {
                 }
             }
 
-            // Stats Grid
+            // Stats Grid — colorful, one accent per metric
             val s = Prefs.getStats(context, pkg)
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    StatCard("SCREEN TIME (24H)", usage?.let { formatDuration(it) } ?: "—", colors, Modifier.weight(1f))
-                    StatCard("TIMES OPENED", "${s.opens}", colors, Modifier.weight(1f))
+                    StatCard(
+                        label = "SCREEN TIME · 24H",
+                        value = usage?.let { formatDuration(it) } ?: "—",
+                        accent = colors.primary,
+                        colors = colors,
+                        modifier = Modifier.weight(1f)
+                    )
+                    StatCard(
+                        label = "TIMES OPENED",
+                        value = "${s.opens}",
+                        accent = colors.warning,
+                        colors = colors,
+                        modifier = Modifier.weight(1f)
+                    )
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    StatCard("MINDFUL EXITS", "${s.blocked}", colors, Modifier.weight(1f))
-                    StatCard("TOTAL OPEN TIME", formatDuration(s.openTimeMs), colors, Modifier.weight(1f))
+                    StatCard(
+                        label = "MINDFUL EXITS",
+                        value = "${s.blocked}",
+                        accent = colors.success,
+                        colors = colors,
+                        modifier = Modifier.weight(1f)
+                    )
+                    StatCard(
+                        label = "TOTAL OPEN TIME",
+                        value = formatDuration(s.openTimeMs),
+                        accent = colors.primary,
+                        colors = colors,
+                        modifier = Modifier.weight(1f)
+                    )
                 }
+            }
+
+            // 7-day usage chart + mindful score
+            if (usageAccess) {
+                WeeklyUsageChart(weekly = weekly, colors = colors)
+                MindfulScoreCard(opens = s.opens, blocked = s.blocked, colors = colors)
             }
 
             // Pause Duration Override
@@ -378,7 +434,13 @@ private fun AppDetailScreen(pkg: String) {
 }
 
 @Composable
-private fun StatCard(label: String, value: String, colors: InhaleColors, modifier: Modifier = Modifier) {
+private fun StatCard(
+    label: String,
+    value: String,
+    accent: Color,
+    colors: InhaleColors,
+    modifier: Modifier = Modifier
+) {
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = colors.surface,
@@ -386,18 +448,194 @@ private fun StatCard(label: String, value: String, colors: InhaleColors, modifie
         modifier = modifier
     ) {
         Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier
+                        .size(8.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(accent.copy(alpha = 0.85f))
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    label,
+                    style = InhaleTheme.typography.labelSmall,
+                    color = colors.textTertiary
+                )
+            }
+            Spacer(Modifier.height(8.dp))
             Text(
                 value,
                 style = InhaleTheme.typography.titleLarge,
                 color = colors.textPrimary,
                 maxLines = 1
             )
-            Spacer(Modifier.height(3.dp))
+        }
+    }
+}
+
+/** Rounded gradient bar chart of screen time over the last 7 days. */
+@Composable
+private fun WeeklyUsageChart(weekly: List<Long>, colors: InhaleColors) {
+    // Animate bars in when data arrives
+    val progress by animateFloatAsState(
+        targetValue = if (weekly.isEmpty()) 0f else 1f,
+        animationSpec = tween(700),
+        label = "chartProgress"
+    )
+
+    Surface(
+        shape = RoundedCornerShape(18.dp),
+        color = colors.surface,
+        border = BorderStroke(1.dp, colors.borderSubtle),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.padding(16.dp)) {
             Text(
-                label,
-                style = InhaleTheme.typography.labelSmall,
-                color = colors.textTertiary
+                "This Week",
+                style = InhaleTheme.typography.titleMedium,
+                color = colors.textPrimary
             )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Screen time over the last 7 days",
+                style = InhaleTheme.typography.bodySmall,
+                color = colors.textSecondary
+            )
+            Spacer(Modifier.height(14.dp))
+            if (weekly.isEmpty()) {
+                Text(
+                    "Loading…",
+                    style = InhaleTheme.typography.bodySmall,
+                    color = colors.textTertiary,
+                    modifier = Modifier.padding(vertical = 24.dp)
+                )
+            } else {
+                val labels = remember {
+                    val dow = java.text.SimpleDateFormat("EE", java.util.Locale.getDefault())
+                    val cal = java.util.Calendar.getInstance()
+                    (6 downTo 0).map { back ->
+                        cal.timeInMillis = System.currentTimeMillis() - back * 24L * 60 * 60 * 1000
+                        dow.format(cal.time).take(2)
+                    }
+                }
+                Canvas(Modifier.fillMaxWidth().height(140.dp)) {
+                    val maxMs = (weekly.maxOrNull() ?: 0L).coerceAtLeast(30 * 60 * 1000L)
+                    val gap = 10.dp.toPx()
+                    val barW = (size.width - gap * 6) / 7f
+                    labels.forEachIndexed { i, day ->
+                        val frac = (weekly[i].toFloat() / maxMs).coerceIn(0f, 1f) * progress
+                        val h = (size.height - 22.dp.toPx()) * frac
+                        val left = i * (barW + gap)
+                        if (h > 1f) {
+                            drawRoundRect(
+                                brush = Brush.verticalGradient(
+                                    colors = listOf(
+                                        colors.primary.copy(alpha = 0.95f),
+                                        colors.primary.copy(alpha = 0.35f)
+                                    ),
+                                    startY = size.height - 22.dp.toPx() - h,
+                                    endY = size.height - 22.dp.toPx()
+                                ),
+                                topLeft = Offset(left, size.height - 22.dp.toPx() - h),
+                                size = Size(barW, h),
+                                cornerRadius = CornerRadius(barW / 3f, barW / 3f)
+                            )
+                        } else {
+                            drawRoundRect(
+                                color = colors.borderSubtle,
+                                topLeft = Offset(left, size.height - 22.dp.toPx() - 4.dp.toPx()),
+                                size = Size(barW, 4.dp.toPx()),
+                                cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx())
+                            )
+                        }
+                        drawContext.canvas.nativeCanvas.drawText(
+                            day,
+                            left + barW / 2f,
+                            size.height,
+                            android.graphics.Paint().apply {
+                                textSize = 11.dp.toPx()
+                                color = android.graphics.Color.argb(
+                                    (colors.textTertiary.alpha * 255).toInt(),
+                                    (colors.textTertiary.red * 255).toInt(),
+                                    (colors.textTertiary.green * 255).toInt(),
+                                    (colors.textTertiary.blue * 255).toInt()
+                                )
+                                textAlign = android.graphics.Paint.Align.CENTER
+                                isAntiAlias = true
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Share of pause screens that ended in a mindful exit, shown as a progress ring. */
+@Composable
+private fun MindfulScoreCard(opens: Int, blocked: Int, colors: InhaleColors) {
+    val total = opens + blocked
+    val score = if (total == 0) 0f else blocked.toFloat() / total
+    val progress by animateFloatAsState(
+        targetValue = score,
+        animationSpec = tween(700),
+        label = "scoreProgress"
+    )
+    val scoreColor = when {
+        score >= 0.5f -> colors.success
+        score >= 0.25f -> colors.warning
+        else -> colors.primary
+    }
+
+    Surface(
+        shape = RoundedCornerShape(18.dp),
+        color = colors.surface,
+        border = BorderStroke(1.dp, colors.borderSubtle),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Box(Modifier.size(76.dp), contentAlignment = Alignment.Center) {
+                Canvas(Modifier.size(76.dp)) {
+                    val stroke = 8.dp.toPx()
+                    drawArc(
+                        color = colors.borderSubtle,
+                        startAngle = -90f,
+                        sweepAngle = 360f,
+                        useCenter = false,
+                        style = Stroke(width = stroke, cap = StrokeCap.Round)
+                    )
+                    drawArc(
+                        color = scoreColor,
+                        startAngle = -90f,
+                        sweepAngle = 360f * progress,
+                        useCenter = false,
+                        style = Stroke(width = stroke, cap = StrokeCap.Round)
+                    )
+                }
+                Text(
+                    "${(score * 100).toInt()}%",
+                    style = InhaleTheme.typography.titleLarge,
+                    color = colors.textPrimary
+                )
+            }
+            Spacer(Modifier.width(16.dp))
+            Column {
+                Text(
+                    "Mindful Score",
+                    style = InhaleTheme.typography.titleMedium,
+                    color = colors.textPrimary
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    if (total == 0) "No pauses yet — your score grows as you choose to stay mindful."
+                    else "You walked away $blocked of $total times this app tried to pull you back.",
+                    style = InhaleTheme.typography.bodySmall,
+                    color = colors.textSecondary
+                )
+            }
         }
     }
 }

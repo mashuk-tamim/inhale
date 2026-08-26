@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Modern Circle with Linear Gradient -->
+    <path
+        android:pathData="
+        M 54,20
+        A 34,34 0 1 1 53.99,20
+        Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="20"
+                android:startY="20"
+                android:endX="88"
+                android:endY="88"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#FF4F46E5" />
+                <item android:offset="1.0" android:color="#FF7C3AED" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Left Pause Bar (||) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="
+        M 47.75,38
+        A 3.25,3.25 0 0 1 51,41.25
+        L 51,66.75
+        A 3.25,3.25 0 0 1 47.75,70
+        A 3.25,3.25 0 0 1 44.5,66.75
+        L 44.5,41.25
+        A 3.25,3.25 0 0 1 47.75,38
+        Z" />
+
+    <!-- Right Pause Bar (||) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="
+        M 60.25,38
+        A 3.25,3.25 0 0 1 63.5,41.25
+        L 63.5,66.75
+        A 3.25,3.25 0 0 1 60.25,70
+        A 3.25,3.25 0 0 1 57,66.75
+        L 57,41.25
+        A 3.25,3.25 0 0 1 60.25,38
+        Z" />
+
+</vector>

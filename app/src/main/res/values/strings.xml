@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Short name: shown under the app icon and in system settings lists. -->
+    <string name="app_name">Inhale</string>
+    <!-- Full name: shown in-app (settings header, etc.) and used as the store listing title. -->
+    <string name="app_name_full">Inhale — Mindful App Pause</string>
+    <string name="accessibility_service_description">Detects when your selected apps open so Inhale can show a mindful break before you use them. Inhale does not read screen content.</string>
+</resources>

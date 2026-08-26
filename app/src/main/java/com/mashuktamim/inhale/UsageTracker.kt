@@ -29,4 +29,21 @@ object UsageTracker {
         }
         return result
     }
+
+    /** Foreground time in ms for one package, one value per day for the last [days] days (oldest first). */
+    fun getUsagePerDay(context: Context, pkg: String, days: Int): List<Long> {
+        val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+        val cal = java.util.Calendar.getInstance().apply {
+            set(java.util.Calendar.HOUR_OF_DAY, 0)
+            set(java.util.Calendar.MINUTE, 0)
+            set(java.util.Calendar.SECOND, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }
+        val endOfToday = cal.timeInMillis + 24L * 60 * 60 * 1000
+        return (days - 1 downTo 0).map { back ->
+            val end = endOfToday - back * 24L * 60 * 60 * 1000
+            val start = end - 24L * 60 * 60 * 1000
+            usm.queryAndAggregateUsageStats(start, end)[pkg]?.totalTimeInForeground ?: 0L
+        }
+    }
 }

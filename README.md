@@ -12,16 +12,18 @@ Every pause is recorded: how many times you opened the app, how often you walked
 
 ## Features
 
-- 🫁 **Guided 4-2-4 breathing exercise** on every pause screen
+- 🫁 **Guided breathing exercise** on every pause screen
+- 💭 **Mindful Quotes** — 280+ curated General and Islamic (Qur'an & Hadith) quotes with customizable preferences
 - ⏱️ **Configurable pause countdown** — global or per-app overrides
 - 🔓 **Bypass windows** — after opening anyway, the app stays unpaused for a while (global or per-app)
-- 📊 **Per-app insights** — screen time, opens, mindful exits, a 7-day usage chart and a Mindful Score ring
+- 📊 **Real-time & weekly insights** — pause-screen daily metrics (screen time, opens, mindful exits), plus 7-day usage charts and Mindful Score rings
+- 🗂️ **App Categories** — organize apps with smooth expandable sections and category-wide select-all toggles
 - 🌙 **Themes** — light, dark, AMOLED, or follow the system
 - 🔒 **Fully private** — all data stays on your device. No accounts, no analytics, no internet permission needed for core functionality.
 
 ## Download
 
-**[⬇️ Download the APK](https://github.com/mashuk-tamim/inhale/releases/latest/download/inhale-v1.0.0.apk)** — always the latest version, no extra clicks.
+**[⬇️ Download the APK](https://github.com/mashuk-tamim/inhale/releases/latest/download/inhale-v1.1.0.apk)** — always the latest version, no extra clicks.
 
 1. Open the downloaded file on your phone (allow "Install unknown apps" if asked).
 2. Follow the onboarding to grant accessibility and (optional) usage access.

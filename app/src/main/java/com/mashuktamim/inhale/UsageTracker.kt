@@ -10,11 +10,20 @@ object UsageTracker {
     /** Whether the user granted this app access to usage statistics. */
     fun hasUsageAccess(context: Context): Boolean {
         val ops = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
-        val mode = ops.unsafeCheckOpNoThrow(
-            AppOpsManager.OPSTR_GET_USAGE_STATS,
-            android.os.Process.myUid(),
-            context.packageName
-        )
+        val mode = if (android.os.Build.VERSION.SDK_INT >= 29) {
+            ops.unsafeCheckOpNoThrow(
+                AppOpsManager.OPSTR_GET_USAGE_STATS,
+                android.os.Process.myUid(),
+                context.packageName
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            ops.checkOpNoThrow(
+                AppOpsManager.OPSTR_GET_USAGE_STATS,
+                android.os.Process.myUid(),
+                context.packageName
+            )
+        }
         return mode == AppOpsManager.MODE_ALLOWED
     }
 

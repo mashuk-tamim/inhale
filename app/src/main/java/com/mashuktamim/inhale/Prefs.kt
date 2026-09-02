@@ -15,12 +15,19 @@ object Prefs {
     private const val KEY_ONBOARDED = "onboarded"
 
     private const val KEY_THEME_MODE = "theme_mode"
+    private const val KEY_QUOTE_TYPE = "quote_type"
 
     enum class ThemeMode {
         SYSTEM,
         DARK,
         LIGHT,
         AMOLED
+    }
+
+    enum class QuoteType {
+        GENERAL,
+        ISLAMIC,
+        BOTH
     }
 
     const val MIN_COUNTDOWN = 3
@@ -44,6 +51,12 @@ object Prefs {
     fun toggleTarget(context: Context, packageName: String) {
         val current = getTargets(context).toMutableSet()
         if (!current.add(packageName)) current.remove(packageName)
+        prefs(context).edit().putStringSet(KEY_TARGETS, current).apply()
+    }
+
+    fun setTarget(context: Context, packageName: String, selected: Boolean) {
+        val current = getTargets(context).toMutableSet()
+        if (selected) current.add(packageName) else current.remove(packageName)
         prefs(context).edit().putStringSet(KEY_TARGETS, current).apply()
     }
 
@@ -85,6 +98,19 @@ object Prefs {
 
     fun setThemeMode(context: Context, mode: ThemeMode) {
         prefs(context).edit().putString(KEY_THEME_MODE, mode.name).apply()
+    }
+
+    fun getQuoteType(context: Context): QuoteType {
+        val name = prefs(context).getString(KEY_QUOTE_TYPE, QuoteType.GENERAL.name)
+        return try {
+            QuoteType.valueOf(name ?: QuoteType.GENERAL.name)
+        } catch (e: Exception) {
+            QuoteType.GENERAL
+        }
+    }
+
+    fun setQuoteType(context: Context, type: QuoteType) {
+        prefs(context).edit().putString(KEY_QUOTE_TYPE, type.name).apply()
     }
 
     // --- Per-app stats ---

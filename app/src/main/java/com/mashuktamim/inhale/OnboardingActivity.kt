@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AccessibilityNew
 import androidx.compose.material.icons.rounded.BatteryChargingFull
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.DataUsage
 import androidx.compose.material.icons.rounded.Spa
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -64,7 +65,8 @@ class OnboardingActivity : ComponentActivity() {
                     val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
                         if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
                             if (step == 0 && isAccessibilityGranted(ctx)) step = 1
-                            if (step == 1 && isIgnoringBatteryOptimizations(ctx)) step = 2
+                            if (step == 1 && UsageTracker.hasUsageAccess(ctx)) step = 2
+                            if (step == 2 && isIgnoringBatteryOptimizations(ctx)) step = 3
                         }
                     }
                     lifecycleOwner.lifecycle.addObserver(observer)
@@ -73,6 +75,7 @@ class OnboardingActivity : ComponentActivity() {
 
                 when (step) {
                     0 -> PermissionScreen(
+                        progress = 0.33f,
                         title = "Accessibility Access",
                         icon = Icons.Rounded.AccessibilityNew,
                         body = "Inhale uses accessibility access to detect when you launch a paused app and present the breathing exercise.",
@@ -92,12 +95,32 @@ class OnboardingActivity : ComponentActivity() {
                         onNext = { step = 1 }
                     )
                     1 -> PermissionScreen(
+                        progress = 0.66f,
+                        title = "Usage Access",
+                        icon = Icons.Rounded.DataUsage,
+                        body = "Grant usage access so Inhale can show real screen-time insights for each app.",
+                        steps = listOf(
+                            "Tap \"Open Settings\" below",
+                            "Find \"Inhale\" in Usage access",
+                            "Allow usage tracking"
+                        ),
+                        buttonText = "Open Settings",
+                        onSkip = { step = 2 },
+                        onAction = {
+                            ctx.startActivity(
+                                Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
+                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            )
+                        }
+                    )
+                    2 -> PermissionScreen(
+                        progress = 1f,
                         title = "Background Continuity",
                         icon = Icons.Rounded.BatteryChargingFull,
                         body = "To prevent Android from halting Inhale in the background, allow it to run without battery restrictions.",
                         steps = emptyList(),
                         buttonText = "Disable Battery Optimization",
-                        onSkip = { step = 2 },
+                        onSkip = { step = 3 },
                         onAction = {
                             try {
                                 ctx.startActivity(
@@ -177,6 +200,7 @@ class OnboardingActivity : ComponentActivity() {
 
     @Composable
     private fun PermissionScreen(
+        progress: Float,
         title: String,
         icon: ImageVector,
         body: String,
@@ -190,7 +214,7 @@ class OnboardingActivity : ComponentActivity() {
         val ctx = LocalContext.current
         val isAccessibility = title.startsWith("Accessibility")
 
-        PermissionShell(progress = if (isAccessibility) 0.33f else 0.66f) {
+        PermissionShell(progress = progress) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier

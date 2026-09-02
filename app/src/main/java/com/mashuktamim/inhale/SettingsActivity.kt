@@ -71,6 +71,7 @@ private fun SettingsScreen(
 
     var countdown by remember { mutableStateOf(Prefs.getCountdown(context)) }
     var bypassMinutes by remember { mutableStateOf(Prefs.getBypassMinutes(context)) }
+    var quoteType by remember { mutableStateOf(Prefs.getQuoteType(context)) }
     var showCustomCountdown by remember { mutableStateOf(false) }
     var showCustomBypass by remember { mutableStateOf(false) }
 
@@ -233,6 +234,36 @@ private fun SettingsScreen(
                         onClick = { showCustomBypass = true },
                         modifier = Modifier.weight(1.3f)
                     )
+                }
+            }
+
+            // --- Mindfulness Quotes ---
+            SettingsCard(
+                title = "Mindfulness Quotes",
+                subtitle = "Choose which quotes to reflect on during the pause.",
+                colors = colors
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    val quoteTypes = listOf(
+                        Prefs.QuoteType.GENERAL to "General",
+                        Prefs.QuoteType.ISLAMIC to "Islamic",
+                        Prefs.QuoteType.BOTH to "Both",
+                    )
+                    quoteTypes.forEach { (type, label) ->
+                        ModernChip(
+                            text = label,
+                            selected = quoteType == type,
+                            colors = colors,
+                            onClick = {
+                                quoteType = type
+                                Prefs.setQuoteType(context, type)
+                            },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
                 }
             }
 

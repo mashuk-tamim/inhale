@@ -4,7 +4,9 @@
 
     <!-- Needed to see which apps are installed (app picker). Fine for sideloading;
          Play Store flags this permission, revisit before publishing. -->
-    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+    <uses-permission
+        android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
     <!-- To request "ignore battery optimizations" during onboarding, so the
          accessibility service isn't killed in the background. -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />

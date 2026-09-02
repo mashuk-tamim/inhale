@@ -12,6 +12,11 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -176,7 +181,7 @@ fun InhaleApp() {
                             }
                             Spacer(Modifier.height(3.dp))
                             Text(
-                                "Breathe before you open",
+                                "Mindful App Pause",
                                 style = InhaleTheme.typography.bodyMedium,
                                 color = colors.textSecondary
                             )
@@ -404,6 +409,10 @@ fun InhaleApp() {
                             onToggleApp = { app ->
                                 Prefs.toggleTarget(context, app.packageName)
                                 targets = Prefs.getTargets(context)
+                            },
+                            onSetAllApps = { appsInCategory, selected ->
+                                appsInCategory.forEach { Prefs.setTarget(context, it.packageName, selected) }
+                                targets = Prefs.getTargets(context)
                             }
                         )
                     }
@@ -586,12 +595,9 @@ private fun CategoryContainer(
     usage: Map<String, Long>?,
     colors: InhaleColors,
     onToggleExpanded: () -> Unit,
-    onToggleApp: (AppInfo) -> Unit
+    onToggleApp: (AppInfo) -> Unit,
+    onSetAllApps: (List<AppInfo>, Boolean) -> Unit
 ) {
-    val chevronRotation by animateFloatAsState(
-        targetValue = if (expanded) 90f else 0f,
-        label = "catChevron"
-    )
     Surface(
         shape = RoundedCornerShape(18.dp),
         color = colors.surface,
@@ -599,7 +605,9 @@ private fun CategoryContainer(
         modifier = Modifier.fillMaxWidth()
     ) {
         Column {
-            // Category Header Row
+            // Category Header Row — name · count (left), select-all toggle (right,
+            // vertically aligned with the per-app toggles below)
+            val allSelected = apps.all { it.packageName in targets }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
@@ -611,84 +619,85 @@ private fun CategoryContainer(
                 Text(
                     category,
                     style = InhaleTheme.typography.titleMedium,
-                    color = colors.textPrimary,
-                    modifier = Modifier.weight(1f)
+                    color = colors.textPrimary
                 )
-                // Single numeric badge (e.g. 10)
+                Spacer(Modifier.width(8.dp))
                 Surface(
                     shape = RoundedCornerShape(8.dp),
-                    color = colors.surfaceSubtle,
-                    border = BorderStroke(1.dp, colors.borderSubtle)
+                    color = colors.primary.copy(alpha = 0.12f)
                 ) {
                     Text(
                         "${apps.size}",
                         style = InhaleTheme.typography.labelSmall,
-                        color = colors.textSecondary,
+                        color = colors.primary,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                     )
                 }
-                Spacer(Modifier.width(8.dp))
-                Icon(
-                    imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                    contentDescription = null,
-                    tint = colors.textTertiary,
-                    modifier = Modifier
-                        .size(18.dp)
-                        .rotate(chevronRotation)
+                Spacer(Modifier.weight(1f))
+                MinimalToggle(
+                    checked = allSelected,
+                    colors = colors,
+                    onCheckedChange = { onSetAllApps(apps, !allSelected) }
                 )
             }
 
             // Expanded Apps list inside the category card
-            if (expanded) {
-                HorizontalDivider(color = colors.borderSubtle, thickness = 1.dp)
-                apps.forEachIndexed { index, app ->
-                    val selected = app.packageName in targets
-                    val usageMs = usage?.get(app.packageName)
+            AnimatedVisibility(
+                visible = expanded,
+                enter = expandVertically(tween(250)) + fadeIn(tween(250)),
+                exit = shrinkVertically(tween(250)) + fadeOut(tween(200))
+            ) {
+                Column {
+                    HorizontalDivider(color = colors.borderSubtle, thickness = 1.dp)
+                    apps.forEachIndexed { index, app ->
+                        val selected = app.packageName in targets
+                        val usageMs = usage?.get(app.packageName)
 
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onToggleApp(app) }
-                            .padding(horizontal = 16.dp, vertical = 11.dp)
-                    ) {
-                        Image(
-                            bitmap = app.icon.asImageBitmap(),
-                            contentDescription = null,
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
-                                .size(38.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                        )
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                app.label,
-                                style = InhaleTheme.typography.titleMedium,
-                                color = colors.textPrimary,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                .fillMaxWidth()
+                                .clickable { onToggleApp(app) }
+                                .padding(horizontal = 16.dp, vertical = 11.dp)
+                        ) {
+                            Image(
+                                bitmap = app.icon.asImageBitmap(),
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(RoundedCornerShape(10.dp))
                             )
-                            if (usageMs != null && usageMs > 0) {
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
                                 Text(
-                                    "${formatDuration(usageMs)} today",
-                                    style = InhaleTheme.typography.bodySmall,
-                                    color = colors.textSecondary
+                                    app.label,
+                                    style = InhaleTheme.typography.titleMedium,
+                                    color = colors.textPrimary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
+                                if (usageMs != null && usageMs > 0) {
+                                    Text(
+                                        "${formatDuration(usageMs)} today",
+                                        style = InhaleTheme.typography.bodySmall,
+                                        color = colors.textSecondary
+                                    )
+                                }
                             }
-                        }
 
-                        MinimalToggle(
-                            checked = selected,
-                            colors = colors,
-                            onCheckedChange = { onToggleApp(app) }
-                        )
-                    }
-                    if (index < apps.size - 1) {
-                        HorizontalDivider(
-                            modifier = Modifier.padding(start = 66.dp),
-                            color = colors.borderSubtle.copy(alpha = 0.5f),
-                            thickness = 0.8.dp
-                        )
+                            MinimalToggle(
+                                checked = selected,
+                                colors = colors,
+                                onCheckedChange = { onToggleApp(app) }
+                            )
+                        }
+                        if (index < apps.size - 1) {
+                            HorizontalDivider(
+                                modifier = Modifier.padding(start = 66.dp),
+                                color = colors.borderSubtle.copy(alpha = 0.5f),
+                                thickness = 0.8.dp
+                            )
+                        }
                     }
                 }
             }

@@ -10,6 +10,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -24,9 +25,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.verticalScroll
 import kotlinx.coroutines.delay
 import androidx.compose.ui.unit.sp
 
@@ -44,11 +48,20 @@ class InhaleActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         val targetPackage = intent.getStringExtra(EXTRA_TARGET_PACKAGE)
+        val targetLabel = targetPackage?.let {
+            try {
+                packageManager.getApplicationInfo(it, 0).loadLabel(packageManager).toString()
+            } catch (e: Exception) {
+                null
+            }
+        }
         val themeMode = Prefs.getThemeMode(this)
 
         setContent {
             InhaleAppTheme(themeMode = themeMode) {
                 InhaleScreen(
+                    targetPackage = targetPackage,
+                    targetLabel = targetLabel,
                     countdownSeconds = targetPackage?.let { Prefs.getEffectiveCountdown(this, it) }
                         ?: Prefs.getCountdown(this),
                     onOpenAnyway = {
@@ -68,10 +81,9 @@ class InhaleActivity : ComponentActivity() {
                         if (targetPackage != null) {
                             Prefs.recordBlocked(this, targetPackage)
                             startActivity(
-                                Intent(this, AppDetailActivity::class.java).apply {
-                                    putExtra(AppDetailActivity.EXTRA_PACKAGE, targetPackage)
-                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                                }
+                                Intent(Intent.ACTION_MAIN)
+                                    .addCategory(Intent.CATEGORY_HOME)
+                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                             )
                         } else {
                             startActivity(
@@ -88,29 +100,31 @@ class InhaleActivity : ComponentActivity() {
     }
 }
 
-/** Mindfulness quotes rotated on each pause screen. */
-private val QUOTES = listOf(
-    "You are the sky. Everything else is just the weather." to "Pema Chödrön",
-    "The present moment is the only moment available to us." to "Thích Nhất Hạnh",
-    "Wherever you are, be all there." to "Jim Elliot",
-    "Nothing is worth more than this day." to "Goethe",
-    "Simplicity is the ultimate sophistication." to "Leonardo da Vinci",
-    "Almost everything will work again if you unplug it for a few minutes — including you." to "Anne Lamott",
-    "Nature does not hurry, yet everything is accomplished." to "Lao Tzu",
-    "Breathe. You are exactly where you need to be." to "Unknown",
-    "Attention is the rarest and purest form of generosity." to "Simone Weil",
-    "The best way to capture moments is to pay attention." to "Jon Kabat-Zinn",
-)
-
 @Composable
 fun InhaleScreen(
+    targetPackage: String?,
+    targetLabel: String?,
     countdownSeconds: Int,
     onOpenAnyway: () -> Unit,
     onMindfulChoice: () -> Unit,
 ) {
+    val context = LocalContext.current
     val colors = InhaleTheme.colors
     val topPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val bottomPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+
+    // Compact 24h insights for the paused app
+    val stats = remember(targetPackage) {
+        targetPackage?.let { Prefs.getStats(context, it) }
+    }
+    var usage24h by remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(targetPackage) {
+        if (targetPackage != null && UsageTracker.hasUsageAccess(context)) {
+            usage24h = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                UsageTracker.getUsageLast24h(context)[targetPackage]
+            }
+        }
+    }
 
     // Fraction remaining, animated continuously every frame.
     var fraction by remember { mutableFloatStateOf(1f) }
@@ -128,7 +142,7 @@ fun InhaleScreen(
     val remainingSecs = (fraction * countdownSeconds).toInt().coerceAtLeast(0)
     val unlocked = fraction <= 0f
 
-    val quote = remember { QUOTES.random() }
+    val quote = remember { Quotes.getRandom(Prefs.getQuoteType(context)) }
 
     Box(
         Modifier
@@ -149,7 +163,7 @@ fun InhaleScreen(
         )
 
         BoxWithConstraints(Modifier.fillMaxSize()) {
-            val circleSize = (maxHeight.value * 0.30f).coerceIn(180f, 250f).dp
+            val circleSize = (maxHeight.value * 0.22f).coerceIn(130f, 180f).dp
             val compact = maxHeight < 640.dp
 
             Column(
@@ -159,26 +173,30 @@ fun InhaleScreen(
                     .padding(
                         start = 24.dp,
                         end = 24.dp,
-                        top = topPadding + 42.dp,
-                        bottom = bottomPadding + 28.dp
+                        top = topPadding + 44.dp,
+                        bottom = bottomPadding + 24.dp
                     )
             ) {
-                // Header Cue with generous top margin away from camera
+                // Header Cue — well clear of the camera cutout
                 Text(
                     "Take a breath",
-                    style = InhaleTheme.typography.headlineMedium,
-                    fontSize = if (compact) 24.sp else 28.sp,
+                    style = InhaleTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = if (compact) 17.sp else 19.sp,
                     color = colors.textPrimary,
-                    modifier = Modifier.padding(bottom = 12.dp)
+                    modifier = Modifier.padding(bottom = if (compact) 14.dp else 18.dp)
                 )
 
-                // Middle area: Breathing Circle + Quote
+                // Middle area: Breathing Circle + Quote + Insights.
+                // Top-aligned so the circle sits right under the header;
+                // scrollable so nothing clips on short screens.
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
+                    verticalArrangement = Arrangement.Top,
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
                 ) {
                     BreathingCircle(
                         progress = fraction,
@@ -187,33 +205,44 @@ fun InhaleScreen(
                         colors = colors
                     )
 
-                    Spacer(Modifier.height(if (compact) 20.dp else 36.dp))
+                    Spacer(Modifier.height(if (compact) 14.dp else 18.dp))
 
                     Surface(
-                        shape = RoundedCornerShape(18.dp),
+                        shape = RoundedCornerShape(16.dp),
                         color = colors.surface.copy(alpha = 0.7f),
                         border = BorderStroke(1.dp, colors.borderSubtle),
-                        modifier = Modifier.fillMaxWidth(0.92f)
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)
                         ) {
                             Text(
                                 "“${quote.first}”",
-                                style = InhaleTheme.typography.bodyLarge,
-                                fontSize = if (compact) 14.sp else 16.sp,
-                                lineHeight = if (compact) 22.sp else 25.sp,
+                                style = InhaleTheme.typography.bodyMedium,
+                                fontSize = if (compact) 13.sp else 14.sp,
+                                lineHeight = if (compact) 19.sp else 21.sp,
                                 color = colors.textPrimary,
                                 textAlign = TextAlign.Center
                             )
-                            Spacer(Modifier.height(8.dp))
+                            Spacer(Modifier.height(6.dp))
                             Text(
                                 "— ${quote.second}",
                                 style = InhaleTheme.typography.labelSmall,
                                 color = colors.textTertiary
                             )
                         }
+                    }
+
+                    if (targetPackage != null) {
+                        Spacer(Modifier.height(if (compact) 10.dp else 12.dp))
+                        CompactInsights(
+                            usage24h = usage24h,
+                            opens = stats?.opens ?: 0,
+                            blocked = stats?.blocked ?: 0,
+                            compact = compact,
+                            colors = colors
+                        )
                     }
                 }
 
@@ -235,9 +264,12 @@ fun InhaleScreen(
                             .height(56.dp)
                     ) {
                         Text(
-                            "Stay Mindful · See Insights",
+                            targetLabel?.let { "I don't want to open $it" } ?: "I don't want to open",
                             style = InhaleTheme.typography.titleMedium,
-                            fontSize = if (compact) 15.sp else 16.sp
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = if (compact) 14.sp else 15.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
 
@@ -263,13 +295,107 @@ fun InhaleScreen(
                     ) {
                         Text(
                             if (unlocked) "Open anyway" else "Open anyway · ${remainingSecs}s",
-                            style = InhaleTheme.typography.bodyMedium,
+                            style = InhaleTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
                             fontSize = if (compact) 14.sp else 15.sp
                         )
                     }
                 }
             }
         }
+    }
+}
+
+/** One-card "last 24h" glance for the paused app, same numbers as its detail page. */
+@Composable
+private fun CompactInsights(
+    usage24h: Long?,
+    opens: Int,
+    blocked: Int,
+    compact: Boolean,
+    colors: InhaleColors
+) {
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = colors.surface.copy(alpha = 0.7f),
+        border = BorderStroke(1.dp, colors.borderSubtle),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+            Text(
+                "LAST 24 HOURS",
+                style = InhaleTheme.typography.labelMedium,
+                fontSize = 10.sp,
+                letterSpacing = 1.2.sp,
+                color = colors.textSecondary,
+                modifier = Modifier.padding(bottom = 10.dp)
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                InsightCell(
+                    value = usage24h?.let { formatDuration(it) } ?: "—",
+                    label = "SCREEN TIME",
+                    accent = colors.primary,
+                    colors = colors,
+                    modifier = Modifier.weight(1.2f),
+                    compact = compact
+                )
+                VerticalDivider(
+                    modifier = Modifier.height(26.dp),
+                    color = colors.borderSubtle.copy(alpha = 0.6f),
+                    thickness = 1.dp
+                )
+                InsightCell(
+                    value = "$opens",
+                    label = "OPENED",
+                    accent = colors.warning,
+                    colors = colors,
+                    modifier = Modifier.weight(0.7f),
+                    compact = compact
+                )
+                VerticalDivider(
+                    modifier = Modifier.height(26.dp),
+                    color = colors.borderSubtle.copy(alpha = 0.6f),
+                    thickness = 1.dp
+                )
+                InsightCell(
+                    value = "$blocked",
+                    label = "MINDFUL EXITS",
+                    accent = colors.success,
+                    colors = colors,
+                    modifier = Modifier.weight(1.1f),
+                    compact = compact
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun InsightCell(
+    value: String,
+    label: String,
+    accent: Color,
+    colors: InhaleColors,
+    modifier: Modifier = Modifier,
+    compact: Boolean
+) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            value,
+            style = InhaleTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            fontSize = if (compact) 17.sp else 18.sp,
+            color = accent,
+            maxLines = 1
+        )
+        Spacer(Modifier.height(3.dp))
+        Text(
+            label,
+            style = InhaleTheme.typography.labelSmall,
+            fontSize = 9.sp,
+            color = colors.textTertiary,
+            maxLines = 1
+        )
     }
 }
 
@@ -304,9 +430,12 @@ fun BreathingCircle(
         )
     )
 
-    val strokeWidthDp = 12.dp
+    val strokeWidthDp = 18.dp
 
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.padding(top = strokeWidthDp / 2)
+    ) {
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier.size(size)
@@ -405,6 +534,7 @@ fun BreathingCircle(
         Text(
             breathLabel,
             style = InhaleTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
             color = colors.primary,
             modifier = Modifier.padding(top = 10.dp)
         )

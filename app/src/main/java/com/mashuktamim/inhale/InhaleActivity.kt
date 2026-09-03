@@ -126,10 +126,39 @@ fun InhaleScreen(
         }
     }
 
-    // Fraction remaining, animated continuously every frame.
+    val selectedFriction = remember {
+        val type = Prefs.getFrictionType(context)
+        if (type == Prefs.FrictionType.RANDOM) {
+            listOf(
+                Prefs.FrictionType.BREATHING,
+                Prefs.FrictionType.MATH,
+                Prefs.FrictionType.TYPING,
+                Prefs.FrictionType.HOLD,
+                Prefs.FrictionType.INTENT
+            ).random()
+        } else {
+            type
+        }
+    }
+    val isBreathing = selectedFriction == Prefs.FrictionType.BREATHING
+
+    var frictionCompleted by remember { mutableStateOf(false) }
+
+    // State for Intent friction
+    var selectedIntent by remember { mutableStateOf<String?>(null) }
+    var isIntentSubmitted by remember { mutableStateOf(false) }
+
+    // State for Typing friction
+    val typingTargetPhrase = remember { typingPhrases.random() }
+    var typingText by remember { mutableStateOf("") }
+    var isTypingSubmitted by remember { mutableStateOf(false) }
+    var typingShowError by remember { mutableStateOf(false) }
+
+    // Countdown fraction — breathing only
     var fraction by remember { mutableFloatStateOf(1f) }
     LaunchedEffect(countdownSeconds) {
-        val start = System.nanoTime()
+        if (!isBreathing) return@LaunchedEffect
+        val start = System.nanoTime() - ((1f - fraction) * countdownSeconds * 1_000_000_000L).toLong()
         val totalNs = countdownSeconds * 1_000_000_000L
         while (true) {
             val elapsed = System.nanoTime() - start
@@ -140,7 +169,7 @@ fun InhaleScreen(
         fraction = 0f
     }
     val remainingSecs = (fraction * countdownSeconds).toInt().coerceAtLeast(0)
-    val unlocked = fraction <= 0f
+    val unlocked = if (isBreathing) fraction <= 0f else frictionCompleted
 
     val quote = remember { Quotes.getRandom(Prefs.getQuoteType(context)) }
 
@@ -173,66 +202,20 @@ fun InhaleScreen(
                     .padding(
                         start = 24.dp,
                         end = 24.dp,
-                        top = topPadding + 44.dp,
+                        top = topPadding + 48.dp,
                         bottom = bottomPadding + 24.dp
                     )
             ) {
-                // Header Cue — well clear of the camera cutout
-                Text(
-                    "Take a breath",
-                    style = InhaleTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = if (compact) 17.sp else 19.sp,
-                    color = colors.textPrimary,
-                    modifier = Modifier.padding(bottom = if (compact) 14.dp else 18.dp)
-                )
-
-                // Middle area: Breathing Circle + Quote + Insights.
-                // Top-aligned so the circle sits right under the header;
-                // scrollable so nothing clips on short screens.
+                // Unified Layout: Reflection Cards at Top, Exercise Centered in Middle
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Top,
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
-                        .verticalScroll(rememberScrollState())
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.Top
                 ) {
-                    BreathingCircle(
-                        progress = fraction,
-                        remaining = remainingSecs,
-                        size = circleSize,
-                        colors = colors
-                    )
-
-                    Spacer(Modifier.height(if (compact) 14.dp else 18.dp))
-
-                    Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = colors.surface.copy(alpha = 0.7f),
-                        border = BorderStroke(1.dp, colors.borderSubtle),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)
-                        ) {
-                            Text(
-                                "“${quote.first}”",
-                                style = InhaleTheme.typography.bodyMedium,
-                                fontSize = if (compact) 13.sp else 14.sp,
-                                lineHeight = if (compact) 19.sp else 21.sp,
-                                color = colors.textPrimary,
-                                textAlign = TextAlign.Center
-                            )
-                            Spacer(Modifier.height(6.dp))
-                            Text(
-                                "— ${quote.second}",
-                                style = InhaleTheme.typography.labelSmall,
-                                color = colors.textTertiary
-                            )
-                        }
-                    }
+                    QuoteCard(quote, compact, colors)
 
                     if (targetPackage != null) {
                         Spacer(Modifier.height(if (compact) 10.dp else 12.dp))
@@ -244,7 +227,75 @@ fun InhaleScreen(
                             colors = colors
                         )
                     }
+
+                    Spacer(Modifier.weight(1f))
+
+                    // Friction challenge centered with ample clearance
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = if (compact) 10.dp else 16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        when (selectedFriction) {
+                            Prefs.FrictionType.BREATHING -> {
+                                BreathingExercise(
+                                    progress = fraction,
+                                    remaining = remainingSecs,
+                                    size = circleSize,
+                                    colors = colors
+                                )
+                            }
+                            Prefs.FrictionType.HOLD -> {
+                                HoldFriction(
+                                    holdSeconds = countdownSeconds,
+                                    size = circleSize,
+                                    colors = colors,
+                                    onCompleted = { frictionCompleted = it }
+                                )
+                            }
+                            Prefs.FrictionType.MATH -> {
+                                MathFriction(
+                                    colors = colors,
+                                    onCompleted = { frictionCompleted = it }
+                                )
+                            }
+                            Prefs.FrictionType.TYPING -> {
+                                TypingFriction(
+                                    targetPhrase = typingTargetPhrase,
+                                    text = typingText,
+                                    onTextChange = {
+                                        typingText = it
+                                        typingShowError = false
+                                    },
+                                    isSubmitted = isTypingSubmitted,
+                                    showError = typingShowError,
+                                    colors = colors
+                                )
+                            }
+                            Prefs.FrictionType.INTENT -> {
+                                IntentFriction(
+                                    selectedOption = selectedIntent,
+                                    onSelectOption = { selectedIntent = it },
+                                    isSubmitted = isIntentSubmitted,
+                                    colors = colors
+                                )
+                            }
+                            else -> {
+                                BreathingExercise(
+                                    progress = fraction,
+                                    remaining = remainingSecs,
+                                    size = circleSize,
+                                    colors = colors
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.weight(1f))
                 }
+
+                Spacer(Modifier.height(16.dp))
 
                 // Action Buttons
                 Column(
@@ -273,35 +324,137 @@ fun InhaleScreen(
                         )
                     }
 
-                    // Secondary De-emphasized Button -> Open anyway
-                    OutlinedButton(
-                        onClick = onOpenAnyway,
-                        enabled = unlocked,
-                        shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            containerColor = if (unlocked) colors.surfaceSubtle else Color.Transparent,
-                            contentColor = if (unlocked) colors.textSecondary else colors.textTertiary,
-                            disabledContainerColor = Color.Transparent,
-                            disabledContentColor = colors.textTertiary.copy(alpha = 0.6f)
-                        ),
-                        border = if (unlocked) {
-                            BorderStroke(1.dp, colors.borderSubtle)
-                        } else {
-                            BorderStroke(1.dp, colors.borderSubtle.copy(alpha = 0.25f))
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(50.dp)
-                    ) {
-                        Text(
-                            if (unlocked) "Open anyway" else "Open anyway · ${remainingSecs}s",
-                            style = InhaleTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = if (compact) 14.sp else 15.sp
-                        )
+                    // Secondary Slot: Submit Button for Intent/Typing before submission,
+                    // otherwise "Open anyway" button!
+                    val isIntentMode = selectedFriction == Prefs.FrictionType.INTENT
+                    val isTypingMode = selectedFriction == Prefs.FrictionType.TYPING
+
+                    if (isIntentMode && !isIntentSubmitted) {
+                        val canSubmit = selectedIntent != null
+                        Button(
+                            onClick = {
+                                if (canSubmit) {
+                                    isIntentSubmitted = true
+                                    frictionCompleted = true
+                                }
+                            },
+                            enabled = canSubmit,
+                            shape = RoundedCornerShape(16.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = colors.primary,
+                                contentColor = colors.onPrimary,
+                                disabledContainerColor = colors.surfaceSubtle,
+                                disabledContentColor = colors.textTertiary
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(50.dp)
+                        ) {
+                            Text(
+                                "Submit",
+                                style = InhaleTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = if (compact) 14.sp else 15.sp
+                            )
+                        }
+                    } else if (isTypingMode && !isTypingSubmitted) {
+                        val canSubmit = typingText.isNotBlank()
+                        Button(
+                            onClick = {
+                                if (normalize(typingText) == normalize(typingTargetPhrase)) {
+                                    isTypingSubmitted = true
+                                    typingShowError = false
+                                    frictionCompleted = true
+                                } else {
+                                    typingShowError = true
+                                }
+                            },
+                            enabled = canSubmit,
+                            shape = RoundedCornerShape(16.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = colors.primary,
+                                contentColor = colors.onPrimary,
+                                disabledContainerColor = colors.surfaceSubtle,
+                                disabledContentColor = colors.textTertiary
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(50.dp)
+                        ) {
+                            Text(
+                                "Submit",
+                                style = InhaleTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = if (compact) 14.sp else 15.sp
+                            )
+                        }
+                    } else {
+                        // Secondary De-emphasized Button -> Open anyway
+                        OutlinedButton(
+                            onClick = onOpenAnyway,
+                            enabled = unlocked,
+                            shape = RoundedCornerShape(16.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                containerColor = if (unlocked) colors.surfaceSubtle else Color.Transparent,
+                                contentColor = if (unlocked) colors.textSecondary else colors.textTertiary,
+                                disabledContainerColor = Color.Transparent,
+                                disabledContentColor = colors.textTertiary.copy(alpha = 0.6f)
+                            ),
+                            border = if (unlocked) {
+                                BorderStroke(1.dp, colors.borderSubtle)
+                            } else {
+                                BorderStroke(1.dp, colors.borderSubtle.copy(alpha = 0.25f))
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(50.dp)
+                        ) {
+                            Text(
+                                if (unlocked) "Open anyway"
+                                else if (isBreathing) "Open anyway · ${remainingSecs}s"
+                                else "Open anyway",
+                                style = InhaleTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = if (compact) 14.sp else 15.sp
+                            )
+                        }
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun QuoteCard(
+    quote: Pair<String, String>,
+    compact: Boolean,
+    colors: InhaleColors
+) {
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = colors.surface.copy(alpha = 0.7f),
+        border = BorderStroke(1.dp, colors.borderSubtle),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)
+        ) {
+            Text(
+                "“${quote.first}”",
+                style = InhaleTheme.typography.bodyMedium,
+                fontSize = if (compact) 13.sp else 14.sp,
+                lineHeight = if (compact) 19.sp else 21.sp,
+                color = colors.textPrimary,
+                textAlign = TextAlign.Center
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "— ${quote.second}",
+                style = InhaleTheme.typography.labelSmall,
+                color = colors.textTertiary
+            )
         }
     }
 }
@@ -406,137 +559,10 @@ fun BreathingCircle(
     size: Dp = 240.dp,
     colors: InhaleColors
 ) {
-    // 4-2-4 breathing cycle: inhale 4s (expand), hold 2s (full), exhale 4s (contract)
-    val breath = remember { Animatable(0.36f) }
-    var breathLabel by remember { mutableStateOf("Inhale") }
-    LaunchedEffect(Unit) {
-        while (true) {
-            breathLabel = "Inhale"
-            breath.animateTo(1f, tween(4000, easing = EaseInOutSine))
-            breathLabel = "Hold"
-            delay(2000)
-            breathLabel = "Exhale"
-            breath.animateTo(0.36f, tween(4000, easing = EaseInOutSine))
-        }
-    }
-    val scale = breath.value
-
-    val ringBrush = Brush.sweepGradient(
-        listOf(
-            colors.primary,
-            colors.accentGlow,
-            colors.primary.copy(alpha = 0.8f),
-            colors.primary
-        )
+    BreathingExercise(
+        progress = progress,
+        remaining = remaining,
+        size = size,
+        colors = colors
     )
-
-    val strokeWidthDp = 18.dp
-
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.padding(top = strokeWidthDp / 2)
-    ) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier.size(size)
-        ) {
-        // Outer Countdown Progress Arc with prominent 12dp width
-        Canvas(Modifier.size(size)) {
-            val strokeWidthPx = strokeWidthDp.toPx()
-            val stroke = Stroke(width = strokeWidthPx, cap = StrokeCap.Round)
-            // Background Track
-            drawArc(
-                color = colors.borderSubtle.copy(alpha = 0.55f),
-                startAngle = -90f,
-                sweepAngle = 360f,
-                useCenter = false,
-                style = stroke
-            )
-            // Active Progress
-            drawArc(
-                brush = ringBrush,
-                startAngle = -90f,
-                sweepAngle = 360f * progress,
-                useCenter = false,
-                style = stroke
-            )
-        }
-
-        // Inner diameter available inside the 12dp outer ring
-        val innerDiameter = size - strokeWidthDp
-
-        // Ambient pulsating sphere 1: expands completely to the inner boundary of the 12dp ring
-        Box(
-            Modifier
-                .size(innerDiameter)
-                .scale(scale)
-                .clip(CircleShape)
-                .background(
-                    Brush.radialGradient(
-                        colorStops = arrayOf(
-                            0.0f to colors.primary.copy(alpha = 0.38f),
-                            0.70f to colors.primary.copy(alpha = 0.28f),
-                            0.94f to colors.primary.copy(alpha = 0.16f),
-                            1.0f to colors.primary.copy(alpha = 0.04f)
-                        )
-                    )
-                )
-        )
-
-        // Pulsating sphere 2: middle body wave
-        Box(
-            Modifier
-                .size(innerDiameter * 0.74f)
-                .scale(scale)
-                .clip(CircleShape)
-                .background(
-                    Brush.radialGradient(
-                        colorStops = arrayOf(
-                            0.0f to colors.primary.copy(alpha = 0.55f),
-                            0.75f to colors.primary.copy(alpha = 0.25f),
-                            1.0f to Color.Transparent
-                        )
-                    )
-                )
-        )
-
-        // Pulsating sphere 3: core glow
-        Box(
-            Modifier
-                .size(innerDiameter * 0.48f)
-                .scale(scale)
-                .clip(CircleShape)
-                .background(
-                    Brush.radialGradient(
-                        colorStops = arrayOf(
-                            0.0f to colors.primary.copy(alpha = 0.70f),
-                            1.0f to colors.primary.copy(alpha = 0.20f)
-                        )
-                    )
-                )
-        )
-
-        // Center Countdown
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Text(
-                "$remaining",
-                style = InhaleTheme.typography.displayMedium,
-                fontSize = (size.value * 0.25f).sp,
-                color = colors.textPrimary
-            )
-        }
-        }
-
-        // Breath cue below the circle
-        Text(
-            breathLabel,
-            style = InhaleTheme.typography.labelMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = colors.primary,
-            modifier = Modifier.padding(top = 10.dp)
-        )
-    }
 }

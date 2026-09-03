@@ -16,6 +16,7 @@ object Prefs {
 
     private const val KEY_THEME_MODE = "theme_mode"
     private const val KEY_QUOTE_TYPE = "quote_type"
+    private const val KEY_FRICTION_TYPE = "friction_type"
 
     enum class ThemeMode {
         SYSTEM,
@@ -28,6 +29,15 @@ object Prefs {
         GENERAL,
         ISLAMIC,
         BOTH
+    }
+
+    enum class FrictionType {
+        BREATHING,
+        MATH,
+        TYPING,
+        HOLD,
+        INTENT,
+        RANDOM
     }
 
     const val MIN_COUNTDOWN = 3
@@ -111,6 +121,19 @@ object Prefs {
 
     fun setQuoteType(context: Context, type: QuoteType) {
         prefs(context).edit().putString(KEY_QUOTE_TYPE, type.name).apply()
+    }
+
+    fun getFrictionType(context: Context): FrictionType {
+        val name = prefs(context).getString(KEY_FRICTION_TYPE, FrictionType.BREATHING.name)
+        return try {
+            FrictionType.valueOf(name ?: FrictionType.BREATHING.name)
+        } catch (e: Exception) {
+            FrictionType.BREATHING
+        }
+    }
+
+    fun setFrictionType(context: Context, type: FrictionType) {
+        prefs(context).edit().putString(KEY_FRICTION_TYPE, type.name).apply()
     }
 
     // --- Per-app stats ---

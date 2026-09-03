@@ -72,6 +72,7 @@ private fun SettingsScreen(
     var countdown by remember { mutableStateOf(Prefs.getCountdown(context)) }
     var bypassMinutes by remember { mutableStateOf(Prefs.getBypassMinutes(context)) }
     var quoteType by remember { mutableStateOf(Prefs.getQuoteType(context)) }
+    var frictionType by remember { mutableStateOf(Prefs.getFrictionType(context)) }
     var showCustomCountdown by remember { mutableStateOf(false) }
     var showCustomBypass by remember { mutableStateOf(false) }
 
@@ -172,11 +173,66 @@ private fun SettingsScreen(
                 }
             }
 
-            // --- Pause Duration ---
+            // --- Behavior Section ---
             SectionLabel("BEHAVIOR", colors)
+
+            SettingsCard(
+                title = "Friction Type",
+                subtitle = "What should you do before opening a distracting app?",
+                colors = colors
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        val row1 = listOf(
+                            Prefs.FrictionType.BREATHING to "Breathing",
+                            Prefs.FrictionType.MATH to "Math",
+                            Prefs.FrictionType.TYPING to "Typing"
+                        )
+                        row1.forEach { (type, label) ->
+                            ModernChip(
+                                text = label,
+                                selected = frictionType == type,
+                                colors = colors,
+                                onClick = {
+                                    frictionType = type
+                                    Prefs.setFrictionType(context, type)
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        val row2 = listOf(
+                            Prefs.FrictionType.HOLD to "Hold",
+                            Prefs.FrictionType.INTENT to "Intent",
+                            Prefs.FrictionType.RANDOM to "Random"
+                        )
+                        row2.forEach { (type, label) ->
+                            ModernChip(
+                                text = label,
+                                selected = frictionType == type,
+                                colors = colors,
+                                onClick = {
+                                    frictionType = type
+                                    Prefs.setFrictionType(context, type)
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // --- Pause Duration ---
             SettingsCard(
                 title = "Pause Duration",
-                subtitle = "Default breathing wait before \"Open anyway\" unlocks.",
+                subtitle = "Wait before \"Open anyway\" unlocks. For Hold friction, this is how long you must hold.",
                 colors = colors
             ) {
                 Row(
